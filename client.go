@@ -1,79 +1,220 @@
 package dbl
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"log"
+	"net"
 	"net/http"
-	"sync"
+	"os"
+	"strings"
+	"sync/atomic"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
-const defaultTimeout = 3 * time.Second
-
-// HTTPClient is an interface for HTTP client implementations.
-type HTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-// OptionFunc is a function that modifies the the *Client provided.
-type OptionFunc func(*Client) error
-
-// Client contains fields and methods for interacting with the Discord Bot List
-// API.
 type Client struct {
-	sync.Mutex
-
-	// bots/* 60/m with 1 hour block if exceeded
-	// Indicates how long the timeout period is/when you will be able to send requests again
-	// Upon exceeding a rate limit, this will be updated with the retry-after value.
-	RetryAfter int
-
-	limiter    *rate.Limiter
-	httpClient HTTPClient
-	token      string
+	limiter        *RateLimiter
+	HTTPClient     http.Client
+	token          string
+	maxWaitTime    time.Duration
+	retryCounter   atomic.Int64
+	retryThreshold int64
+	trippedUntil   atomic.Int64 // UnixNano
+	maxRetries     uint8
+	traceLogger    *log.Logger
 }
 
-// NewClient returns a new *Client after applying the options provided.
-func NewClient(token string, options ...OptionFunc) (*Client, error) {
-	client := &Client{
-		limiter:    rate.NewLimiter(1, 60),
-		httpClient: &http.Client{Timeout: defaultTimeout},
-		token:      token,
-	}
-
-	for _, optionFunc := range options {
-		if optionFunc == nil {
-			return nil, fmt.Errorf("invalid nil dbl.Client option func")
-		}
-
-		if err := optionFunc(client); err != nil {
-			return nil, fmt.Errorf("error running dbl.Client option func: %w", err)
-		}
-	}
-
-	return client, nil
+type ClientOptions struct {
+	Token              string
+	RateLimiterOptions RateLimiterOptions
+	MaxWaitTime        time.Duration
+	RetryThreshold     uint32
+	MaxRetries         uint8
+	Trace              bool
 }
 
-// HTTPClientOption allows for customizing the HTTP client used.
-func HTTPClientOption(httpClient HTTPClient) OptionFunc {
-	return func(client *Client) error {
-		client.httpClient = httpClient
+type rateLimitError struct {
+	RetryAfter float64 `json:"retry-after"`
+}
 
-		return nil
+func NewClient(opt ClientOptions) *Client {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2: false,
+		MaxIdleConns:      256,
+		IdleConnTimeout:   90 * time.Second,
+	}
+
+	maxTimeout := 10 * time.Second
+	if opt.MaxWaitTime != 0 {
+		maxTimeout = opt.MaxWaitTime
+	}
+
+	maxRetries := opt.MaxRetries
+	if opt.MaxRetries == 0 {
+		maxRetries = 3
+	}
+
+	retryThreshold := opt.RetryThreshold
+	if retryThreshold == 0 {
+		retryThreshold = 60
+	}
+
+	var traceLogger *log.Logger
+	if opt.Trace {
+		traceLogger = log.New(os.Stdout, "", log.LstdFlags)
+		opt.RateLimiterOptions.TraceLogger = traceLogger
+	}
+
+	limiter := NewRateLimiter(opt.RateLimiterOptions)
+
+	return &Client{
+		limiter: limiter,
+		HTTPClient: http.Client{
+			Transport: &rateLimitTransport{
+				limiter:        limiter,
+				innerTransport: transport,
+			},
+			Timeout: maxTimeout,
+		},
+		token:          opt.Token,
+		maxRetries:     maxRetries,
+		maxWaitTime:    maxTimeout,
+		retryThreshold: int64(retryThreshold),
+		traceLogger:    traceLogger,
 	}
 }
 
-// TimeoutOption allows for customizing the HTTP client timeout.
-func TimeoutOption(duration time.Duration) OptionFunc {
-	return func(client *Client) error {
-		httpClient, ok := client.httpClient.(*http.Client)
-		if !ok {
-			return fmt.Errorf("unable to type assert Client.httpClient to *http.Client")
+func (c *Client) tripped() bool {
+	return c.trippedUntil.Load() > time.Now().UnixNano()
+}
+
+func (c *Client) request(method, route string, jsonPayload any) ([]byte, error) {
+	var body io.ReadSeeker
+	if jsonPayload != nil {
+		var buf bytes.Buffer
+		encoder := json.NewEncoder(&buf)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(jsonPayload); err != nil {
+			return nil, fmt.Errorf("failed to encode JSON payload: %w", err)
+		}
+		body = bytes.NewReader(buf.Bytes())
+	}
+
+	var (
+		responseBody []byte
+		lastErr      error
+		retrying     bool
+	)
+
+	defer func() {
+		if retrying {
+			c.retryCounter.Add(-1)
+		}
+	}()
+
+	for i := uint8(0); i < c.maxRetries; i++ {
+		if body != nil {
+			if _, err := body.Seek(0, io.SeekStart); err != nil {
+				return nil, fmt.Errorf("failed to seek request body: %w", err)
+			}
 		}
 
-		httpClient.Timeout = duration
+		if c.tripped() {
+			return nil, ErrLocalRatelimit
+		}
 
-		return nil
+		url := BaseURL + route
+		req, err := http.NewRequest(method, url, body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+
+		if strings.HasPrefix(route, "/v1") {
+			req.Header.Set("Authorization", "Bearer "+c.token)
+		} else {
+			req.Header.Set("Authorization", c.token)
+		}
+
+		responseBody, err = c.executeOnce(req)
+		if err != nil {
+			lastErr = err
+
+			if errors.Is(err, ErrRemoteRatelimit) || errors.Is(err, ErrRequestFailed) {
+				if !retrying {
+					retrying = true
+					if c.retryCounter.Add(1) > c.retryThreshold {
+						c.trippedUntil.Store(time.Now().Add(5 * time.Second).UnixNano())
+						return nil, fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, c.retryThreshold)
+					}
+				}
+
+				if errors.Is(err, ErrRemoteRatelimit) {
+					continue
+				}
+
+				time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
+				continue
+			}
+
+			return nil, err
+		}
+		return responseBody, nil
 	}
+
+	return nil, fmt.Errorf("request failed after %d retries on %s %s: %w", c.maxRetries, method, route, lastErr)
+}
+
+func (c *Client) executeOnce(req *http.Request) ([]byte, error) {
+	res, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: http request execution failed: %s", ErrRequestFailed, err.Error())
+	}
+	defer res.Body.Close()
+
+	responseBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if res.StatusCode >= http.StatusOK && res.StatusCode < http.StatusMultipleChoices {
+		return responseBody, nil
+	}
+
+	if res.StatusCode == http.StatusTooManyRequests {
+		var rateErr rateLimitError
+		err = json.Unmarshal(responseBody, &rateErr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response rate limited error body: %w", err)
+		}
+
+		retryAfter := time.Duration(rateErr.RetryAfter * float64(time.Second))
+		if retryAfter == 0 {
+			retryAfter = time.Minute // Safe default
+		}
+
+		c.limiter.SetGlobalWait(retryAfter)
+		return nil, fmt.Errorf("%w: retrying after %s", ErrRemoteRatelimit, retryAfter.String())
+	}
+
+	if res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden {
+		return nil, ErrUnauthorizedRequest
+	}
+
+	if res.StatusCode >= http.StatusInternalServerError {
+		return nil, fmt.Errorf("%w: top.gg API internal server error: %s", ErrRequestFailed, res.Status)
+	}
+
+	return nil, fmt.Errorf("request failed with status %s: %s", res.Status, string(responseBody))
 }
