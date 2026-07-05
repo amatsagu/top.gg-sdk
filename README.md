@@ -1,134 +1,174 @@
-## Go DBL
+# Top.gg Go SDK
 
-[![Build Status](https://travis-ci.com/rumblefrog/go-dbl.svg?branch=master)](https://travis-ci.com/rumblefrog/go-dbl)
-[![Go Report Card](https://goreportcard.com/badge/github.com/DiscordBotList/go-dbl)](https://goreportcard.com/report/github.com/DiscordBotList/go-dbl)
-[![GoDoc](https://godoc.org/github.com/DiscordBotList/go-dbl?status.svg)](https://godoc.org/github.com/DiscordBotList/go-dbl)
+<a href="https://pkg.go.dev/github.com/top-gg-community/go-sdk">
+	<img src="https://pkg.go.dev/badge/github.com/top-gg-community/go-sdk.svg" alt="Go Reference">
+</a>
+<br><br>
 
-An API wrapper for [Discord Bots](https://top.gg/)
+The community-maintained Go SDK for Top.gg.
+> For more information, see the documentation here: <https://docs.top.gg>.
 
-Godoc is available here: https://godoc.org/github.com/DiscordBotList/go-dbl
+## Chapters
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-## Table of Contents
+- [Installation](#installation)
+- [Setting up](#setting-up)
+- [Usage](#usage)
+  - [Getting your project's information](#getting-your-projects-information)
+  - [Updating your project's information](#updating-your-projects-information)
+  - [Getting your project's vote information of a user](#getting-your-projects-vote-information-of-a-user)
+  - [Getting a paginated list of votes for your project](#getting-a-paginated-list-of-votes-for-your-project)
+  - [Posting an announcement for your project](#posting-an-announcement-for-your-project)
+  - [Posting your project's metric stats](#posting-your-projects-metric-stats)
+  - [Posting your bot's application commands list](#posting-your-bots-application-commands-list)
+  - [Webhooks](#webhooks)
 
-- [Go DBL](#go-dbl)
-- [Table of Contents](#table-of-contents)
-- [Guides](#guides)
-	- [Installing](#installing)
-	- [Posting Stats](#posting-stats)
-	- [Setting options](#setting-options)
-	- [Ratelimits](#ratelimits)
-	- [Webhook](#webhook)
-	- [More details](#more-details)
+## Installation
 
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
-## Guides
-
-### Installing
-
-```bash
-go get -u github.com/top-gg/go-dbl
+```sh
+go get github.com/top-gg/go-dbl
 ```
 
-### Posting Stats
+## Setting up
 
 ```go
 package main
 
 import (
 	"log"
-
+	
 	"github.com/top-gg/go-dbl"
 )
 
 func main() {
-	dblClient, err := dbl.NewClient("token")
-	if err != nil {
-		log.Fatalf("Error creating new Discord Bot List client: %s", err)
-	}
-
-	err = dblClient.PostBotStats("botID", &dbl.BotStatsPayload{
-		Shards: []int{2500}, // If non-sharded, just pass total server count as the only integer element
+	client := dbl.NewClient(dbl.ClientOptions{
+		Token: "YOUR_TOP_GG_TOKEN",
 	})
-	if err != nil {
-		log.Printf("Error sending bot stats to Discord Bot List: %s", err)
-	}
-
-	// ...
 }
 ```
 
-### Setting options
+## Usage
+
+### Getting your project's information
+
+```go
+project, err := client.GetMyProject()
+if err != nil {
+	log.Fatal(err)
+}
+
+log.Printf("Project ID: %s, Name: %s", project.ID, project.Name)
+```
+
+### Updating your project's information
+
+```go
+err := client.EditMyProject(dbl.ProjectPayload{
+	Headline: map[dbl.Locale]string{
+		dbl.LocaleEnglish: "A great bot with tons of features!",
+	},
+	PageContent: map[dbl.Locale]string{
+		dbl.LocaleEnglish: "# Welcome\nThis is the full page description for your project...",
+	},
+})
+```
+
+### Getting your project's vote information of a user
+
+#### Discord ID
+
+```go
+vote, err := client.GetVote("661200758510977084", "discord")
+```
+
+### Getting a paginated list of votes for your project
+
+```go
+// Fetch votes starting from a specific date
+since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+votes, err := client.GetVotes("", &since)
+
+log.Printf("Fetched %d votes", len(votes.Votes))
+
+// Fetch the next page using the cursor
+nextPage, err := client.GetVotes(votes.Cursor, nil)
+```
+
+### Posting an announcement for your project 
+
+```go
+announcement, err := client.PostAnnouncement(
+	"Version 2.0 Released!",
+	"We just released version 2.0 with a bunch of new features and improvements.",
+	"", // Category (optional)
+)
+
+log.Printf("Announcement posted at: %s", announcement.CreatedAt)
+```
+
+### Posting your project's metric stats
+
+#### Single
+
+```go
+err := client.PostMyMetrics(dbl.MetricsPayload{
+	ServerCount: 420,
+	ShardCount:  53,
+})
+```
+
+#### Batch
+
+```go
+err := client.PostMyMetricsInBatch([]dbl.MetricsPayload{
+	{
+		ServerCount: 420,
+		ShardCount:  53,
+	},
+	{
+		ServerCount: 435,
+	},
+})
+```
+
+### Posting your bot's application commands list
+
+```go
+// Assuming you have a JSON array of raw Discord application commands
+var rawCommands []any
+
+err := client.PostApplicationCommands(rawCommands)
+```
+
+### Webhooks
+
+Use the unified webhook handler to easily handle both legacy v0 and modern v1 crypto webhooks using the standard `http.Handler` interface:
 
 ```go
 package main
 
 import (
-	"log"
-	"net/http"
-	"time"
-
-	"github.com/top-gg/go-dbl"
-)
-
-const clientTimeout = 5 * time.Second
-
-func main() {
-	httpClient := &http.Client{}
-
-	dblClient, err := dbl.NewClient(
-		"token",
-		dbl.HTTPClientOption(httpClient), // Setting a custom HTTP client. Default is *http.Client with default timeout.
-		dbl.TimeoutOption(clientTimeout), // Setting timeout option. Default is 3 seconds
-	)
-	if err != nil {
-		log.Fatalf("Error creating new Discord Bot List client: %s", err)
-	}
-
-	// ...
-}
-```
-
-### Ratelimits
-
-There's a local token bucket rate limiter, allowing for 60 requests a minute (single/burst)
-
-Upon reaching the local rate limit, `ErrLocalRatelimit` error will be returned
-
-If remote rate limit is exceeded, `ErrRemoteRatelimit` error will be returned and `RetryAfter` in client fields will be updated with the retry time
-
-### Webhook
-
-```go
-package main
-
-import (
-	"errors"
-	"log"
+	"fmt"
 	"net/http"
 
 	"github.com/top-gg/go-dbl"
 )
 
-const listenerPort = ":9090"
-
 func main() {
-	listener := dbl.NewListener("token", handleVote)
+	client := dbl.NewClient(dbl.ClientOptions{
+		Token: "YOUR_TOP_GG_TOKEN",
+	})
 
-	// Serve is a blocking call
-	err := listener.Serve(listenerPort)
-	if !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("HTTP server error: %s", err)
-	}
-}
+	webhookHandler := client.NewWebhookHandler(dbl.WebhookOptions{
+		Secret: "YOUR_WEBHOOK_SECRET",
+		OnVote: func(vote dbl.VoteCreatePayload) {
+			fmt.Printf("Received vote from user %s with weight %d\n", vote.User.ID, vote.Weight)
+		},
+		OnIntegrationCreate: func(integration dbl.IntegrationCreatePayload) {
+			fmt.Printf("Integration created! Auto-updated secret to: %s\n", integration.Secret)
+		},
+	})
 
-func handleVote(payload *dbl.WebhookPayload) {
-	// perform on payload
+	http.Handle("/webhook", webhookHandler)
+	http.ListenAndServe(":8080", nil)
 }
 ```
-
-### More details
-
-For more details, Godoc and tests are available
