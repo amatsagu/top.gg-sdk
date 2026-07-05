@@ -77,7 +77,7 @@ err := client.EditMyProject(dbl.ProjectPayload{
 #### Discord ID
 
 ```go
-vote, err := client.GetVote("661200758510977084", "discord")
+vote, err := client.GetVote(661200758510977084, "discord")
 ```
 
 ### Getting a paginated list of votes for your project
