@@ -10,35 +10,39 @@ import (
 
 // https://docs.top.gg/api/v1/projects#get-%2Fprojects%2Fproject_id
 type Project struct {
-	ID          Snowflake `json:"id"`
-	Name        string    `json:"name"`
-	Platform    string    `json:"platform"`
-	Type        string    `json:"type"`
-	Headline    string    `json:"headline"`
-	Tags        []string  `json:"tags,omitzero"`
-	Votes       int       `json:"votes"`
-	VotesTotal  int       `json:"votes_total"`
-	ReviewScore float64   `json:"review_score"`
-	ReviewCount int       `json:"review_count"`
+	ID          Snowflake   `json:"id"`
+	Name        string      `json:"name"`
+	Platform    Platform    `json:"platform"`
+	Type        ProjectType `json:"type"`
+	Headline    string      `json:"headline"`
+	Tags        []string    `json:"tags"`
+	Votes       int         `json:"votes"`
+	VotesTotal  int         `json:"votes_total"`
+	ReviewScore float64     `json:"review_score"`
+	ReviewCount int         `json:"review_count"`
 }
 
+// https://docs.top.gg/api/v1/projects#request-body
 type ProjectPayload struct {
-	Headline    map[string]string `json:"headline,omitempty"`
-	PageContent map[string]string `json:"page_content,omitempty"`
+	Headline    map[Locale]string `json:"headline,omitempty"`
+	PageContent map[Locale]string `json:"page_content,omitempty"`
 }
 
+// https://docs.top.gg/api/v1/projects#response-fields-2
 type Announcement struct {
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// https://docs.top.gg/api/v1/votes#response-fields-2
 type PartialVote struct {
 	VotedAt   time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Weight    int       `json:"weight"`
 }
 
+// https://docs.top.gg/api/v1/votes#param-data
 type Vote struct {
 	PartialVote
 	VoterID    Snowflake `json:"user_id"`
@@ -50,6 +54,8 @@ type PaginatedVotes struct {
 	Cursor string
 }
 
+// https://docs.top.gg/api/v1/projects#discord-server
+// https://docs.top.gg/api/v1/projects#roblox-game
 type MetricsPayload struct {
 	ServerCount int `json:"server_count,omitempty"`
 	ShardCount  int `json:"shard_count,omitempty"`
@@ -58,10 +64,44 @@ type MetricsPayload struct {
 	PlayerCount int `json:"player_count,omitempty"`
 }
 
-type BatchMetricsPayload struct {
-	Timestamp *time.Time     `json:"timestamp,omitempty"`
-	Metrics   MetricsPayload `json:"metrics"`
-}
+// https://docs.top.gg/api/v1/projects#param-platform
+type Platform string
+
+const (
+	PlatformDiscord Platform = "discord"
+	PlatformRoblox  Platform = "roblox"
+)
+
+// https://docs.top.gg/api/v1/projects#param-type
+type ProjectType string
+
+const (
+	ProjectTypeBot    ProjectType = "bot"
+	ProjectTypeServer ProjectType = "server"
+	ProjectTypeGame   ProjectType = "game"
+)
+
+// https://docs.top.gg/api/v1/projects#supported-locales
+type Locale string
+
+const (
+	LocaleEnglish    Locale = "en"
+	LocaleGerman     Locale = "de"
+	LocaleFrench     Locale = "fr"
+	LocalePortuguese Locale = "pt"
+	LocaleTurkish    Locale = "tr"
+	LocaleHindi      Locale = "hi"
+	LocaleJapanese   Locale = "ja"
+	LocaleArabic     Locale = "ar"
+	LocaleDutch      Locale = "nl"
+	LocaleKorean     Locale = "ko"
+	LocaleItalian    Locale = "it"
+	LocaleSpanish    Locale = "es"
+	LocaleRussian    Locale = "ru"
+	LocaleUkrainian  Locale = "uk"
+	LocaleVietnamese Locale = "vi"
+	LocaleChinese    Locale = "zh"
+)
 
 // GetProject fetches project data by its ID.
 // https://docs.top.gg/api/v1/projects#get-%2Fprojects%2Fproject_id
@@ -127,7 +167,7 @@ func (c *Client) PostMyMetrics(payload MetricsPayload) error {
 }
 
 // https://docs.top.gg/api/v1/projects#post-/projects/@me/metrics/batch
-func (c *Client) PostMyMetricsInBatch(payload []BatchMetricsPayload) error {
+func (c *Client) PostMyMetricsInBatch(payload []MetricsPayload) error {
 	body := map[string]any{"data": payload}
 	_, err := c.request(http.MethodPost, "/v1/projects/@me/metrics/batch", body)
 	return err
