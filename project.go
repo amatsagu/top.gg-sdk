@@ -49,6 +49,7 @@ type Vote struct {
 	PlatformID Snowflake `json:"platform_id"`
 }
 
+// https://docs.top.gg/api/v1/votes#response-fields
 type PaginatedVotes struct {
 	Votes  []Vote
 	Cursor string
