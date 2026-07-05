@@ -218,3 +218,20 @@ func (c *Client) executeOnce(req *http.Request) ([]byte, error) {
 
 	return nil, fmt.Errorf("request failed with status %s: %s", res.Status, string(responseBody))
 }
+
+func (c *Client) NewWebhookHandler(opt WebhookOptions) http.Handler {
+	window := opt.TimestampWindow
+	if window == 0 {
+		window = 30 * time.Second
+	}
+
+	return &Webhook{
+		secret:              opt.Secret,
+		timestampWindow:     window,
+		client:              c,
+		onVote:              opt.OnVote,
+		onIntegrationCreate: opt.OnIntegrationCreate,
+		onIntegrationDelete: opt.OnIntegrationDelete,
+		onTest:              opt.OnTest,
+	}
+}
