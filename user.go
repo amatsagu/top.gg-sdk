@@ -8,15 +8,15 @@ import (
 
 // https://docs.top.gg/api/v0/users#response-fields
 type User struct {
-	ID                 Snowflake `json:"id"`
-	Username           string    `json:"username"`
+	Social             Social    `json:"social"`
+	Banner             string    `json:"banner,omitempty"`
 	Discriminator      string    `json:"discriminator"`
 	Avatar             string    `json:"avatar,omitempty"`
 	DefAvatar          string    `json:"defAvatar"`
 	Biography          string    `json:"bio,omitempty"`
-	Banner             string    `json:"banner,omitempty"`
-	Social             Social    `json:"social"`
+	Username           string    `json:"username"`
 	Color              string    `json:"color,omitempty"`
+	ID                 Snowflake `json:"id"`
 	Supporter          bool      `json:"supporter"`
 	CertifiedDeveloper bool      `json:"certifiedDev"`
 	Moderator          bool      `json:"mod"`

@@ -26,17 +26,17 @@ const (
 
 // Represents a minimal project object from a webhook payload
 type PartialProject struct {
-	ID         Snowflake   `json:"id"`
 	Type       ProjectType `json:"type"`
 	Platform   Platform    `json:"platform"`
+	ID         Snowflake   `json:"id"`
 	PlatformID Snowflake   `json:"platform_id"`
 }
 
 // WebhookUser represents a user in a webhook payload
 type WebhookUser struct {
-	ID         Snowflake `json:"id"`
 	Name       string    `json:"name"`
 	Avatar     string    `json:"avatar_url"`
+	ID         Snowflake `json:"id"`
 	PlatformID Snowflake `json:"platform_id"`
 }
 
@@ -53,13 +53,13 @@ type IntegrationDeletePayload struct {
 
 // https://docs.top.gg/webhooks/events#vote-create
 type VoteCreatePayload struct {
-	ID        Snowflake         `json:"id"`
-	Weight    int               `json:"weight"`
 	VotedAt   time.Time         `json:"created_at"`
 	ExpiresAt time.Time         `json:"expires_at"`
-	Project   PartialProject    `json:"project"`
 	Query     map[string]string `json:"query"`
+	Project   PartialProject    `json:"project"`
 	User      WebhookUser       `json:"user"`
+	ID        Snowflake         `json:"id"`
+	Weight    int               `json:"weight"`
 }
 
 // https://docs.top.gg/webhooks/events#webhook-test
@@ -75,31 +75,31 @@ type WebhookPayload struct {
 }
 
 type WebhookOptions struct {
-	Secret              string
-	TimestampWindow     time.Duration
 	OnVote              func(vote VoteCreatePayload)
 	OnIntegrationCreate func(integration IntegrationCreatePayload)
 	OnIntegrationDelete func(integration IntegrationDeletePayload)
 	OnTest              func(test WebhookTestPayload)
+	Secret              string
+	TimestampWindow     time.Duration
 }
 
 // https://docs.top.gg/webhooks/events#legacy-v0-webhook-events
 type v0VotePayload struct {
+	Type      string    `json:"type"`
+	Query     string    `json:"query"`
 	Bot       Snowflake `json:"bot"`
 	User      Snowflake `json:"user"`
-	Type      string    `json:"type"`
 	IsWeekend bool      `json:"isWeekend"`
-	Query     string    `json:"query"`
 }
 
 type Webhook struct {
-	secret              string
-	timestampWindow     time.Duration
 	client              *Client
 	onVote              func(vote VoteCreatePayload)
 	onIntegrationCreate func(integration IntegrationCreatePayload)
 	onIntegrationDelete func(integration IntegrationDeletePayload)
 	onTest              func(test WebhookTestPayload)
+	secret              string
+	timestampWindow     time.Duration
 }
 
 // Automatically handles both v0 (legacy Authorization) and v1 (x-topgg-signature HMAC) webhooks.

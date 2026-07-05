@@ -17,19 +17,19 @@ import (
 
 type Client struct {
 	limiter        *RateLimiter
+	traceLogger    *log.Logger
 	HTTPClient     http.Client
 	token          string
 	maxWaitTime    time.Duration
 	retryCounter   atomic.Int64
 	retryThreshold int64
-	trippedUntil   atomic.Int64 // UnixNano
+	trippedUntil   atomic.Int64
 	maxRetries     uint8
-	traceLogger    *log.Logger
 }
 
 type ClientOptions struct {
-	Token              string
 	RateLimiterOptions RateLimiterOptions
+	Token              string
 	MaxWaitTime        time.Duration
 	RetryThreshold     uint32
 	MaxRetries         uint8

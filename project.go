@@ -10,12 +10,12 @@ import (
 
 // https://docs.top.gg/api/v1/projects#get-%2Fprojects%2Fproject_id
 type Project struct {
-	ID          Snowflake   `json:"id"`
 	Name        string      `json:"name"`
 	Platform    Platform    `json:"platform"`
 	Type        ProjectType `json:"type"`
 	Headline    string      `json:"headline"`
 	Tags        []string    `json:"tags"`
+	ID          Snowflake   `json:"id"`
 	Votes       int         `json:"votes"`
 	VotesTotal  int         `json:"votes_total"`
 	ReviewScore float64     `json:"review_score"`
@@ -30,9 +30,9 @@ type ProjectPayload struct {
 
 // https://docs.top.gg/api/v1/projects#response-fields-2
 type Announcement struct {
+	CreatedAt time.Time `json:"created_at"`
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 // https://docs.top.gg/api/v1/votes#response-fields-2
@@ -51,8 +51,8 @@ type Vote struct {
 
 // https://docs.top.gg/api/v1/votes#response-fields
 type PaginatedVotes struct {
-	Votes  []Vote
 	Cursor string
+	Votes  []Vote
 }
 
 // https://docs.top.gg/api/v1/projects#discord-server
@@ -201,8 +201,8 @@ func (c *Client) GetVotes(cursor string, startDate *time.Time) (*PaginatedVotes,
 	}
 
 	var res struct {
-		Data   []Vote `json:"data"`
 		Cursor string `json:"cursor"`
+		Data   []Vote `json:"data"`
 	}
 
 	err = json.Unmarshal(b, &res)

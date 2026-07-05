@@ -11,11 +11,11 @@ import (
 
 // https://docs.top.gg/api/v0/bots#get-/bots
 type BotQueryOptions struct {
-	Limit  int
-	Offset int
 	Search string
 	Sort   string
 	Fields string
+	Limit  int
+	Offset int
 }
 
 // https://docs.top.gg/api/v0/bots#get-/bots
@@ -29,37 +29,37 @@ type BotQueryResponse struct {
 
 // https://docs.top.gg/api/v0/bots#bot-structure
 type Bot struct {
-	ID               Snowflake   `json:"id"`
-	Username         string      `json:"username"`
-	Discriminator    string      `json:"discriminator"`
+	Date             time.Time   `json:"date"`
+	Github           string      `json:"github,omitempty"`
+	DonateBotGuildID string      `json:"donatebotguildid"`
 	Avatar           string      `json:"avatar,omitempty"`
 	DefAvatar        string      `json:"defAvatar,omitempty"`
 	Library          string      `json:"lib"`
 	Prefix           string      `json:"prefix"`
 	ShortDescription string      `json:"shortdesc"`
-	LongDescription  string      `json:"longdesc,omitempty"`
-	Tags             []string    `json:"tags,omitzero"`
-	Website          string      `json:"website,omitempty"`
-	Support          string      `json:"support,omitempty"`
-	Github           string      `json:"github,omitempty"`
-	Owners           []Snowflake `json:"owners,omitzero"`
-	GuildAffiliation []Snowflake `json:"guilds,omitzero"`
 	Invite           string      `json:"invite,omitempty"`
-	Date             time.Time   `json:"date"`
+	Vanity           string      `json:"vanity,omitempty"`
+	Website          string      `json:"website,omitempty"`
+	Discriminator    string      `json:"discriminator"`
+	Support          string      `json:"support,omitempty"`
+	LongDescription  string      `json:"longdesc,omitempty"`
+	Username         string      `json:"username"`
+	Tags             []string    `json:"tags,omitzero"`
+	GuildAffiliation []Snowflake `json:"guilds,omitzero"`
+	Owners           []Snowflake `json:"owners,omitzero"`
 	ServerCount      int         `json:"server_count,omitempty"`
 	ShardCount       int         `json:"shard_count,omitempty"`
-	CertifiedBot     bool        `json:"certifiedBot"`
-	Vanity           string      `json:"vanity,omitempty"`
+	ID               Snowflake   `json:"id"`
 	Points           int         `json:"points"`
 	MonthlyPoints    int         `json:"monthlyPoints"`
-	DonateBotGuildID string      `json:"donatebotguildid"`
+	CertifiedBot     bool        `json:"certifiedBot"`
 }
 
 // https://docs.top.gg/api/v0/bots#get-/bots/bot_id/stats
 // https://docs.top.gg/api/v0/bots#post-/bots/bot_id/stats
 type BotStats struct {
-	ServerCount int   `json:"server_count,omitempty"`
 	Shards      []int `json:"shards,omitzero"`
+	ServerCount int   `json:"server_count,omitempty"`
 	ShardCount  int   `json:"shard_count,omitempty"`
 }
 
