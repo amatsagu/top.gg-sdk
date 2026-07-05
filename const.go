@@ -1,5 +1,6 @@
 package dbl
 
 const (
-	BaseURL = "https://top.gg/api/"
+	BaseURL       = "https://top.gg/api"
+	DISCORD_EPOCH = 1420070400000
 )
