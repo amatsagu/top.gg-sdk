@@ -181,7 +181,7 @@ func (c *Client) executeOnce(req *http.Request) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: http request execution failed: %s", ErrRequestFailed, err.Error())
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }() // Thanks linter...
 
 	responseBody, err := io.ReadAll(res.Body)
 	if err != nil {
