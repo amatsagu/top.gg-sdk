@@ -33,7 +33,7 @@ type Bot struct {
 	Username         string      `json:"username"`
 	Discriminator    string      `json:"discriminator"`
 	Avatar           string      `json:"avatar,omitempty"`
-	DefAvatar        string      `json:"defAvatar"`
+	DefAvatar        string      `json:"defAvatar,omitempty"`
 	Library          string      `json:"lib"`
 	Prefix           string      `json:"prefix"`
 	ShortDescription string      `json:"shortdesc"`
@@ -43,16 +43,16 @@ type Bot struct {
 	Support          string      `json:"support,omitempty"`
 	Github           string      `json:"github,omitempty"`
 	Owners           []Snowflake `json:"owners,omitzero"`
+	GuildAffiliation []Snowflake `json:"guilds,omitzero"`
 	Invite           string      `json:"invite,omitempty"`
 	Date             time.Time   `json:"date"`
+	ServerCount      int         `json:"server_count,omitempty"`
+	ShardCount       int         `json:"shard_count,omitempty"`
 	CertifiedBot     bool        `json:"certifiedBot"`
 	Vanity           string      `json:"vanity,omitempty"`
-	MonthlyPoints    int         `json:"monthlyPoints"`
 	Points           int         `json:"points"`
-	DonateBotGuildID Snowflake   `json:"donatebotguildid,omitempty"`
-	ServerCount      int         `json:"server_count,omitempty"`
-	GuildAffiliation []Snowflake `json:"guilds,omitzero"`
-	Shards           []int       `json:"shards,omitzero"`
+	MonthlyPoints    int         `json:"monthlyPoints"`
+	DonateBotGuildID string      `json:"donatebotguildid"`
 }
 
 // https://docs.top.gg/api/v0/bots#get-/bots/bot_id/stats
@@ -63,6 +63,7 @@ type BotStats struct {
 	ShardCount  int   `json:"shard_count,omitempty"`
 }
 
+// https://docs.top.gg/api/v0/bots#get-/bots/bot_id/check
 type botVotedResponse struct {
 	Voted int `json:"voted"`
 }
