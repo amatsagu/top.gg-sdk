@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -141,11 +140,7 @@ func (c *Client) request(method, route string, jsonPayload any) ([]byte, error) 
 			req.Header.Set("Content-Type", "application/json")
 		}
 
-		if strings.HasPrefix(route, "/v1") {
-			req.Header.Set("Authorization", "Bearer "+c.token)
-		} else {
-			req.Header.Set("Authorization", c.token)
-		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
 
 		responseBody, err = c.executeOnce(req)
 		if err != nil {

@@ -25,7 +25,7 @@ The community-maintained Go SDK for Top.gg.
 ## Installation
 
 ```sh
-go get github.com/top-gg/go-dbl
+go get github.com/top-gg-community/go-sdk
 ```
 
 ## Setting up
@@ -36,11 +36,11 @@ package main
 import (
 	"log"
 	
-	"github.com/top-gg/go-dbl"
+	"github.com/top-gg-community/go-sdk"
 )
 
 func main() {
-	client := dbl.NewClient(dbl.ClientOptions{
+	client := topgg.NewClient(topgg.ClientOptions{
 		Token: "YOUR_TOP_GG_TOKEN",
 	})
 }
@@ -62,12 +62,12 @@ log.Printf("Project ID: %s, Name: %s", project.ID, project.Name)
 ### Updating your project's information
 
 ```go
-err := client.EditMyProject(dbl.ProjectPayload{
-	Headline: map[dbl.Locale]string{
-		dbl.LocaleEnglish: "A great bot with tons of features!",
+err := client.EditMyProject(topgg.ProjectPayload{
+	Headline: map[topgg.Locale]string{
+		topgg.LocaleEnglish: "A great bot with tons of features!",
 	},
-	PageContent: map[dbl.Locale]string{
-		dbl.LocaleEnglish: "# Welcome\nThis is the full page description for your project...",
+	PageContent: map[topgg.Locale]string{
+		topgg.LocaleEnglish: "# Welcome\nThis is the full page description for your project...",
 	},
 })
 ```
@@ -77,7 +77,7 @@ err := client.EditMyProject(dbl.ProjectPayload{
 #### Discord ID
 
 ```go
-vote, err := client.GetVote(661200758510977084, "discord")
+vote, err := client.GetVote(topgg.Snowflake("661200758510977084"), topgg.PlatformDiscord)
 ```
 
 ### Getting a paginated list of votes for your project
@@ -110,7 +110,7 @@ log.Printf("Announcement posted at: %s", announcement.CreatedAt)
 #### Single
 
 ```go
-err := client.PostMyMetrics(dbl.MetricsPayload{
+err := client.PostMyMetrics(topgg.MetricsPayload{
 	ServerCount: 420,
 	ShardCount:  53,
 })
@@ -119,7 +119,7 @@ err := client.PostMyMetrics(dbl.MetricsPayload{
 #### Batch
 
 ```go
-err := client.PostMyMetricsInBatch([]dbl.MetricsPayload{
+err := client.PostMyMetricsInBatch([]topgg.MetricsPayload{
 	{
 		ServerCount: 420,
 		ShardCount:  53,
@@ -141,7 +141,7 @@ err := client.PostApplicationCommands(rawCommands)
 
 ### Webhooks
 
-Use the unified webhook handler to easily handle both legacy v0 and modern v1 crypto webhooks using the standard `http.Handler` interface:
+Use the unified webhook handler to easily handle modern v1 crypto webhooks using the standard `http.Handler` interface:
 
 ```go
 package main
@@ -150,20 +150,20 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/top-gg/go-dbl"
+	"github.com/top-gg-community/go-sdk"
 )
 
 func main() {
-	client := dbl.NewClient(dbl.ClientOptions{
+	client := topgg.NewClient(topgg.ClientOptions{
 		Token: "YOUR_TOP_GG_TOKEN",
 	})
 
-	webhookHandler := client.NewWebhookHandler(dbl.WebhookOptions{
+	webhookHandler := client.NewWebhookHandler(topgg.WebhookOptions{
 		Secret: "YOUR_WEBHOOK_SECRET",
-		OnVote: func(vote dbl.VoteCreatePayload) {
+		OnVote: func(vote topgg.VoteCreatePayload) {
 			fmt.Printf("Received vote from user %s with weight %d\n", vote.User.ID, vote.Weight)
 		},
-		OnIntegrationCreate: func(integration dbl.IntegrationCreatePayload) {
+		OnIntegrationCreate: func(integration topgg.IntegrationCreatePayload) {
 			fmt.Printf("Integration created! Auto-updated secret to: %s\n", integration.Secret)
 		},
 	})

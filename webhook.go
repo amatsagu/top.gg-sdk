@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -83,15 +82,6 @@ type WebhookOptions struct {
 	TimestampWindow     time.Duration
 }
 
-// https://docs.top.gg/webhooks/events#legacy-v0-webhook-events
-type v0VotePayload struct {
-	Type      string    `json:"type"`
-	Query     string    `json:"query"`
-	Bot       Snowflake `json:"bot"`
-	User      Snowflake `json:"user"`
-	IsWeekend bool      `json:"isWeekend"`
-}
-
 type Webhook struct {
 	client              *Client
 	onVote              func(vote VoteCreatePayload)
@@ -102,7 +92,7 @@ type Webhook struct {
 	timestampWindow     time.Duration
 }
 
-// Automatically handles both v0 (legacy Authorization) and v1 (x-topgg-signature HMAC) webhooks.
+// Handles modern v1 (x-topgg-signature HMAC) webhooks.
 func (w *Webhook) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
@@ -117,11 +107,12 @@ func (w *Webhook) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	defer func() { _ = r.Body.Close() }()
 
 	signatureHeader := r.Header.Get("x-topgg-signature")
-	if signatureHeader != "" {
-		w.handleV1(rw, body, signatureHeader)
-	} else {
-		w.handleV0(rw, body, r.Header.Get("Authorization"))
+	if signatureHeader == "" {
+		http.Error(rw, "unauthorized", http.StatusUnauthorized)
+		return
 	}
+
+	w.handleV1(rw, body, signatureHeader)
 }
 
 // Parses modern v1 Webhooks using HMAC verification and routes to callbacks.
@@ -168,69 +159,6 @@ func (w *Webhook) handleV1(rw http.ResponseWriter, body []byte, signatureHeader 
 				w.onTest(test)
 			}
 		}
-	}
-
-	rw.WriteHeader(http.StatusOK)
-}
-
-// Parses legacy Webhooks using raw string Authorization match.
-// It normalizes v0 webhook payloads into the v1 VoteCreatePayload structure to ensure callback consistency.
-func (w *Webhook) handleV0(rw http.ResponseWriter, body []byte, authHeader string) {
-	if authHeader != w.secret {
-		http.Error(rw, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	var v0Payload v0VotePayload
-	if err := json.Unmarshal(body, &v0Payload); err != nil {
-		http.Error(rw, "bad request", http.StatusBadRequest)
-		return
-	}
-
-	if v0Payload.Type == "test" {
-		if w.onTest != nil {
-			w.onTest(WebhookTestPayload{
-				Project: PartialProject{
-					ID:   v0Payload.Bot,
-					Type: ProjectTypeBot,
-				},
-				User: WebhookUser{
-					ID: v0Payload.User,
-				},
-			})
-		}
-	} else if w.onVote != nil {
-		weight := 1
-		if v0Payload.IsWeekend {
-			weight = 2
-		}
-
-		queryMap := make(map[string]string)
-		if v0Payload.Query != "" {
-			qStr := strings.TrimPrefix(v0Payload.Query, "?")
-			if parsed, err := url.ParseQuery(qStr); err == nil {
-				for k, v := range parsed {
-					if len(v) > 0 {
-						queryMap[k] = v[0]
-					}
-				}
-			}
-		}
-
-		now := time.Now().UTC()
-		w.onVote(VoteCreatePayload{
-			Weight:    weight,
-			VotedAt:   now,
-			ExpiresAt: now.Add(12 * time.Hour), // roughly standard vote expiration
-			Project: PartialProject{
-				ID:   v0Payload.Bot,
-				Type: ProjectTypeBot,
-			},
-			User: WebhookUser{
-				ID: v0Payload.User,
-			},
-			Query: queryMap,
-		})
 	}
 
 	rw.WriteHeader(http.StatusOK)
