@@ -1,4 +1,4 @@
-module github.com/top-gg/go-dbl
+module github.com/top-gg-community/go-sdk
 
 tool github.com/evilmartians/lefthook/v2
 
