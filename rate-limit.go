@@ -47,6 +47,10 @@ type rateLimitError struct {
 }
 
 func NewRateLimiter(opt RateLimiterOptions) *RateLimiter {
+	if opt.TraceLogger == nil {
+		opt.TraceLogger = log.New(io.Discard, "", 0)
+	}
+
 	return &RateLimiter{
 		traceLogger: opt.TraceLogger,
 		bucket: Bucket{
@@ -57,9 +61,7 @@ func NewRateLimiter(opt RateLimiterOptions) *RateLimiter {
 }
 
 func (rl *RateLimiter) tracef(format string, v ...any) {
-	if rl.traceLogger != nil {
-		rl.traceLogger.Printf("[(REST) LIMITER] "+format, v...)
-	}
+	rl.traceLogger.Printf("[(REST) HTTP RATE LIMITER] "+format, v...)
 }
 
 func (rl *RateLimiter) Wait(ctx context.Context) error {
@@ -179,7 +181,12 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 			}
 
 			bodyBytes, err := io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
+			if cErr := resp.Body.Close(); cErr != nil {
+				lastResp = resp
+				lastErr = fmt.Errorf("%w: failed to close rate limit response body: %w", ErrRequestFailed, cErr)
+				time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
+				continue
+			}
 
 			if err == nil {
 				var rateErr rateLimitError
@@ -208,11 +215,17 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 				}
 			}
 
-			io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-			lastResp = resp
-			lastErr = fmt.Errorf("%w: top.gg API internal server error: %s", ErrRequestFailed, resp.Status)
+			if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+				lastErr = fmt.Errorf("%w: failed to read top.gg API internal server error body: %w", ErrRequestFailed, err)
+			} else {
+				lastErr = fmt.Errorf("%w: top.gg API internal server error: %s", ErrRequestFailed, resp.Status)
+			}
 
+			if cErr := resp.Body.Close(); cErr != nil {
+				lastErr = fmt.Errorf("%w: failed to close internal server error response body: %w", ErrRequestFailed, cErr)
+			}
+
+			lastResp = resp
 			time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
 			continue
 		}

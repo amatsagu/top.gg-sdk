@@ -46,11 +46,12 @@ func NewClient(opt ClientOptions) *Client {
 		retryThreshold = 60
 	}
 
-	var traceLogger *log.Logger
+	traceLogger := log.New(io.Discard, "[Top.gg SDK] ", 0)
 	if opt.Trace {
-		traceLogger = log.New(os.Stdout, "", log.LstdFlags)
-		opt.RateLimiterOptions.TraceLogger = traceLogger
+		traceLogger.SetOutput(os.Stdout)
+		traceLogger.SetFlags(log.LstdFlags)
 	}
+	opt.RateLimiterOptions.TraceLogger = traceLogger
 
 	limiter := NewRateLimiter(opt.RateLimiterOptions)
 
@@ -114,7 +115,12 @@ func (c *Client) request(ctx context.Context, method, route string, jsonPayload 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = res.Body.Close() }()
+
+	defer func() {
+		if cErr := res.Body.Close(); cErr != nil && err == nil {
+			err = fmt.Errorf("failed to close response body: %w", cErr)
+		}
+	}()
 
 	responseBody, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -145,5 +151,6 @@ func (c *Client) NewWebhookHandler(opt WebhookOptions) http.Handler {
 		onIntegrationCreate: opt.OnIntegrationCreate,
 		onIntegrationDelete: opt.OnIntegrationDelete,
 		onTest:              opt.OnTest,
+		traceLogger:         c.traceLogger,
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -90,6 +91,11 @@ type Webhook struct {
 	secretMu            sync.RWMutex
 	secret              string
 	timestampWindow     time.Duration
+	traceLogger         *log.Logger
+}
+
+func (w *Webhook) tracef(format string, v ...any) {
+	w.traceLogger.Printf("[WEBHOOK] "+format, v...)
 }
 
 // Handles modern v1 (x-topgg-signature HMAC) webhooks.
@@ -104,7 +110,12 @@ func (w *Webhook) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
-	defer func() { _ = r.Body.Close() }()
+
+	defer func() {
+		if cErr := r.Body.Close(); cErr != nil {
+			w.tracef("failed to close webhook request body: %v", cErr)
+		}
+	}()
 
 	signatureHeader := r.Header.Get("x-topgg-signature")
 	if signatureHeader == "" {
