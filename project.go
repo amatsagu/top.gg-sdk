@@ -176,8 +176,18 @@ func (c *Client) PostMyMetricsInBatch(ctx context.Context, payload []MetricsPayl
 }
 
 // https://docs.top.gg/api/v1/votes#get-/projects/@me/votes/user_id
-func (c *Client) GetVote(ctx context.Context, userID Snowflake, source string) (*PartialVote, error) {
-	b, err := c.request(ctx, http.MethodGet, fmt.Sprintf("/v1/projects/@me/votes/%s?source=%s", userID, source), nil)
+func (c *Client) GetVote(ctx context.Context, userID Snowflake, source Platform) (*PartialVote, error) {
+	q := url.Values{}
+	if source != "" {
+		q.Set("source", string(source))
+	}
+
+	urlStr := fmt.Sprintf("/v1/projects/@me/votes/%d", userID)
+	if len(q) > 0 {
+		urlStr += "?" + q.Encode()
+	}
+
+	b, err := c.request(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -192,11 +202,18 @@ func (c *Client) GetVotes(ctx context.Context, cursor string, startDate *time.Ti
 	q := url.Values{}
 	if startDate != nil {
 		q.Set("startDate", startDate.Format(time.RFC3339))
-	} else if cursor != "" {
+	}
+
+	if cursor != "" {
 		q.Set("cursor", cursor)
 	}
 
-	b, err := c.request(ctx, http.MethodGet, fmt.Sprintf("/v1/projects/@me/votes?%s", q.Encode()), nil)
+	urlStr := "/v1/projects/@me/votes"
+	if len(q) > 0 {
+		urlStr += "?" + q.Encode()
+	}
+
+	b, err := c.request(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
 		return nil, err
 	}
