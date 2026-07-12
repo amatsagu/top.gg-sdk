@@ -91,7 +91,7 @@ func (c *Client) tracef(format string, v ...any) {
 	c.traceLogger.Printf("[CLIENT] "+format, v...)
 }
 
-func (c *Client) request(ctx context.Context, method, route string, jsonPayload any) ([]byte, error) {
+func (c *Client) request(ctx context.Context, method, route string, jsonPayload any) (response []byte, err error) {
 	var body io.Reader
 	if jsonPayload != nil {
 		var buf bytes.Buffer
