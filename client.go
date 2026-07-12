@@ -22,12 +22,12 @@ type Client struct {
 
 type ClientOptions struct {
 	RateLimiterOptions RateLimiterOptions
+	HTTPClient         *http.Client
 	Token              string
 	MaxWaitTime        time.Duration
 	RetryThreshold     uint32
 	MaxRetries         uint8
 	Trace              bool
-	HTTPClient         *http.Client // Optional client You want to use for making all API requests.
 }
 
 func NewClient(opt ClientOptions) *Client {

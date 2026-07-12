@@ -88,10 +88,10 @@ type Webhook struct {
 	onIntegrationCreate func(integration IntegrationCreatePayload)
 	onIntegrationDelete func(integration IntegrationDeletePayload)
 	onTest              func(test WebhookTestPayload)
-	secretMu            sync.RWMutex
+	traceLogger         *log.Logger
 	secret              string
 	timestampWindow     time.Duration
-	traceLogger         *log.Logger
+	secretMu            sync.RWMutex
 }
 
 func (w *Webhook) tracef(format string, v ...any) {
