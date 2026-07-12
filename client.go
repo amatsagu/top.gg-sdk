@@ -87,6 +87,10 @@ func NewClient(opt ClientOptions) *Client {
 	}
 }
 
+func (c *Client) tracef(format string, v ...any) {
+	c.traceLogger.Printf("[CLIENT] "+format, v...)
+}
+
 func (c *Client) request(ctx context.Context, method, route string, jsonPayload any) ([]byte, error) {
 	var body io.Reader
 	if jsonPayload != nil {
@@ -110,6 +114,8 @@ func (c *Client) request(ctx context.Context, method, route string, jsonPayload 
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.token)
+
+	c.tracef("Making API request: %s :: %s/%s", method, BaseURL, route)
 
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
