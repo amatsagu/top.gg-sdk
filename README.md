@@ -21,6 +21,7 @@ The community-maintained Go SDK for Top.gg.
   - [Posting your project's metric stats](#posting-your-projects-metric-stats)
   - [Posting your bot's application commands list](#posting-your-bots-application-commands-list)
   - [Webhooks](#webhooks)
+- [Contributing](#contributing)
 
 ## Installation
 
@@ -34,12 +35,14 @@ go get github.com/top-gg-community/go-sdk
 package main
 
 import (
+	"context"
 	"log"
 	
 	"github.com/top-gg-community/go-sdk"
 )
 
 func main() {
+	ctx := context.Background()
 	client := topgg.NewClient(topgg.ClientOptions{
 		Token: "YOUR_TOP_GG_TOKEN",
 	})
@@ -51,7 +54,7 @@ func main() {
 ### Getting your project's information
 
 ```go
-project, err := client.GetMyProject()
+project, err := client.GetMyProject(ctx)
 if err != nil {
 	log.Fatal(err)
 }
@@ -62,7 +65,7 @@ log.Printf("Project ID: %s, Name: %s", project.ID, project.Name)
 ### Updating your project's information
 
 ```go
-err := client.EditMyProject(topgg.ProjectPayload{
+err := client.EditMyProject(ctx, topgg.ProjectPayload{
 	Headline: map[topgg.Locale]string{
 		topgg.LocaleEnglish: "A great bot with tons of features!",
 	},
@@ -77,7 +80,7 @@ err := client.EditMyProject(topgg.ProjectPayload{
 #### Discord ID
 
 ```go
-vote, err := client.GetVote(topgg.Snowflake("661200758510977084"), topgg.PlatformDiscord)
+vote, err := client.GetVote(ctx, topgg.Snowflake(661200758510977084), topgg.PlatformDiscord)
 ```
 
 ### Getting a paginated list of votes for your project
@@ -85,18 +88,19 @@ vote, err := client.GetVote(topgg.Snowflake("661200758510977084"), topgg.Platfor
 ```go
 // Fetch votes starting from a specific date
 since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-votes, err := client.GetVotes("", &since)
+votes, err := client.GetVotes(ctx, "", &since)
 
 log.Printf("Fetched %d votes", len(votes.Votes))
 
 // Fetch the next page using the cursor
-nextPage, err := client.GetVotes(votes.Cursor, nil)
+nextPage, err := client.GetVotes(ctx, votes.Cursor, nil)
 ```
 
 ### Posting an announcement for your project 
 
 ```go
 announcement, err := client.PostAnnouncement(
+	ctx,
 	"Version 2.0 Released!",
 	"We just released version 2.0 with a bunch of new features and improvements.",
 	"", // Category (optional)
@@ -110,7 +114,7 @@ log.Printf("Announcement posted at: %s", announcement.CreatedAt)
 #### Single
 
 ```go
-err := client.PostMyMetrics(topgg.MetricsPayload{
+err := client.PostMyMetrics(ctx, topgg.MetricsPayload{
 	ServerCount: 420,
 	ShardCount:  53,
 })
@@ -119,7 +123,7 @@ err := client.PostMyMetrics(topgg.MetricsPayload{
 #### Batch
 
 ```go
-err := client.PostMyMetricsInBatch([]topgg.MetricsPayload{
+err := client.PostMyMetricsInBatch(ctx, []topgg.MetricsPayload{
 	{
 		ServerCount: 420,
 		ShardCount:  53,
@@ -136,7 +140,7 @@ err := client.PostMyMetricsInBatch([]topgg.MetricsPayload{
 // Assuming you have a JSON array of raw Discord application commands
 var rawCommands []any
 
-err := client.PostApplicationCommands(rawCommands)
+err := client.PostApplicationCommands(ctx, rawCommands)
 ```
 
 ### Webhooks
@@ -172,3 +176,7 @@ func main() {
 	http.ListenAndServe(":8080", nil)
 }
 ```
+
+## Contributing
+
+We welcome community contributions! Please read our [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to get started, set up your development environment, and submit pull requests.
