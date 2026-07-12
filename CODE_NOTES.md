@@ -10,3 +10,7 @@ To ensure consistent behavior with other languages and align with Discord API ex
 - `omitzero` for **slices or maps** where an **explicit empty value** (e.g., `[]`) must be included in the payload to signal the removal or absence of a resource.
 
 > ⚠️ Please at least for now avoid using `omitempty` on bool type struct fields. Go's default, zero value logic may overwrite expected outcome (in some cases). I'll try finding better solution later on but that works for now.
+
+
+### API Documentation Links
+Always try to include direct URL links to the relevant pieces of the Top.gg documentation (e.g., `https://docs.top.gg/api/v1/...`) in the doc comments directly above any corresponding structs, payload types, or methods. This helps users quickly cross-reference SDK behavior with the official API docs.
