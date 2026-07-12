@@ -176,7 +176,12 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 				retrying = true
 				if t.retryCounter.Add(1) > t.retryThreshold {
 					t.trippedUntil.Store(time.Now().Add(5 * time.Second).UnixNano())
-					return resp, fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, t.retryThreshold)
+					errRet := fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, t.retryThreshold)
+					if cErr := resp.Body.Close(); cErr != nil {
+						errRet = fmt.Errorf("%w, and failed to close response body: %v", errRet, cErr)
+					}
+
+					return nil, errRet
 				}
 			}
 
@@ -211,7 +216,12 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 				retrying = true
 				if t.retryCounter.Add(1) > t.retryThreshold {
 					t.trippedUntil.Store(time.Now().Add(5 * time.Second).UnixNano())
-					return resp, fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, t.retryThreshold)
+					errRet := fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, t.retryThreshold)
+					if cErr := resp.Body.Close(); cErr != nil {
+						errRet = fmt.Errorf("%w, and failed to close response body: %v", errRet, cErr)
+					}
+
+					return nil, errRet
 				}
 			}
 
@@ -235,7 +245,7 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 
 	if lastErr != nil {
 		if lastResp != nil {
-			return lastResp, lastErr
+			return nil, lastErr
 		}
 
 		return nil, fmt.Errorf("request failed after %d retries: %w", t.maxRetries, lastErr)
