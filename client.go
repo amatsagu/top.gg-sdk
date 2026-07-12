@@ -113,6 +113,7 @@ func (c *Client) request(ctx context.Context, method, route string, jsonPayload 
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Authorization", "Bearer "+c.token)
 
 	c.tracef("Making API request: %s :: %s/%s", method, BaseURL, route)
