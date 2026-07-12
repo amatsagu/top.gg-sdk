@@ -1,10 +1,15 @@
 package topgg
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,27 +28,32 @@ type RateLimiter struct {
 	globalWait  time.Time
 	traceLogger *log.Logger
 
-	buckets  map[string]*Bucket
-	mu       sync.RWMutex
+	bucket   Bucket
 	globalMu sync.RWMutex
 }
 
 type rateLimitTransport struct {
 	limiter        *RateLimiter
 	innerTransport http.RoundTripper
+
+	retryCounter   atomic.Int64
+	retryThreshold int64
+	trippedUntil   atomic.Int64
+	maxRetries     uint8
+}
+
+type rateLimitError struct {
+	RetryAfter float64 `json:"retry-after"`
 }
 
 func NewRateLimiter(opt RateLimiterOptions) *RateLimiter {
-	rl := &RateLimiter{
-		buckets:     make(map[string]*Bucket),
+	return &RateLimiter{
 		traceLogger: opt.TraceLogger,
+		bucket: Bucket{
+			Limit:     100,
+			Remaining: 100,
+		},
 	}
-
-	rl.buckets["global"] = &Bucket{Limit: 100, Remaining: 100}
-	rl.buckets["/bots"] = &Bucket{Limit: 60, Remaining: 60}
-	rl.buckets["/users"] = &Bucket{Limit: 60, Remaining: 60}
-
-	return rl
 }
 
 func (rl *RateLimiter) tracef(format string, v ...any) {
@@ -52,84 +62,171 @@ func (rl *RateLimiter) tracef(format string, v ...any) {
 	}
 }
 
-func (rl *RateLimiter) Wait(route string) func() {
+func (rl *RateLimiter) Wait(ctx context.Context) error {
 	rl.globalMu.RLock()
 	if !rl.globalWait.IsZero() && time.Now().Before(rl.globalWait) {
 		wait := time.Until(rl.globalWait)
 		rl.globalMu.RUnlock()
 		rl.tracef("Global rate limit or 429 hit! Waiting %s...", wait.Round(time.Millisecond))
-		time.Sleep(wait)
+
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	} else {
 		rl.globalMu.RUnlock()
 	}
 
-	bucketKey := "global"
-	if strings.HasPrefix(route, "/bots") {
-		bucketKey = "/bots"
-	} else if strings.HasPrefix(route, "/users") {
-		bucketKey = "/users"
-	}
+	for {
+		rl.bucket.mu.Lock()
+		now := time.Now()
 
-	rl.mu.Lock()
-	bucket, exists := rl.buckets[bucketKey]
-	if !exists {
-		bucket = rl.buckets["global"]
-	}
-	rl.mu.Unlock()
-
-	bucket.mu.Lock()
-	now := time.Now()
-
-	if now.After(bucket.ResetAt) {
-		bucket.Remaining = bucket.Limit
-		if bucketKey == "global" {
-			bucket.ResetAt = now.Add(time.Second)
-		} else {
-			bucket.ResetAt = now.Add(time.Minute)
+		if now.After(rl.bucket.ResetAt) {
+			rl.bucket.Remaining = rl.bucket.Limit
+			rl.bucket.ResetAt = now.Add(time.Second)
 		}
-	}
 
-	if bucket.Remaining <= 0 {
-		waitDuration := bucket.ResetAt.Sub(now)
-		rl.tracef("Rate limit hit on bucket \"%s\"! Waiting %s...", bucketKey, waitDuration.Round(time.Millisecond))
-		time.Sleep(waitDuration)
-		bucket.Remaining = bucket.Limit
-		if bucketKey == "global" {
-			bucket.ResetAt = time.Now().Add(time.Second)
-		} else {
-			bucket.ResetAt = time.Now().Add(time.Minute)
+		if rl.bucket.Remaining > 0 {
+			rl.bucket.Remaining--
+			rl.bucket.mu.Unlock()
+			return nil
 		}
-	}
 
-	bucket.Remaining--
-	return func() {
-		bucket.mu.Unlock()
+		waitDuration := rl.bucket.ResetAt.Sub(now)
+		rl.bucket.mu.Unlock()
+
+		rl.tracef("Rate limit hit on global bucket! Waiting %s...", waitDuration.Round(time.Millisecond))
+
+		timer := time.NewTimer(waitDuration)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 }
 
 func (rl *RateLimiter) SetGlobalWait(d time.Duration) {
 	rl.globalMu.Lock()
 	defer rl.globalMu.Unlock()
+
 	rl.globalWait = time.Now().Add(d)
 	rl.tracef("Received 429! All requests suspended for %s", d.Round(time.Millisecond))
 }
 
+func (t *rateLimitTransport) tripped() bool {
+	return t.trippedUntil.Load() > time.Now().UnixNano()
+}
+
 func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	route := req.URL.Path
-	if strings.HasPrefix(route, "/api/v0") {
-		route = route[7:]
-	} else if strings.HasPrefix(route, "/api/v1") {
-		route = route[7:]
+	var (
+		lastResp *http.Response
+		lastErr  error
+		retrying bool
+	)
+
+	defer func() {
+		if retrying {
+			t.retryCounter.Add(-1)
+		}
+	}()
+
+	for i := uint8(0); i < t.maxRetries; i++ {
+		if t.tripped() {
+			return nil, ErrLocalRatelimit
+		}
+
+		if err := t.limiter.Wait(req.Context()); err != nil {
+			return nil, err
+		}
+
+		if i > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get request body for retry: %w", err)
+			}
+
+			req.Body = body
+		}
+
+		resp, err := t.innerTransport.RoundTrip(req)
+		if err != nil {
+			lastErr = err
+
+			if !retrying {
+				retrying = true
+				if t.retryCounter.Add(1) > t.retryThreshold {
+					t.trippedUntil.Store(time.Now().Add(5 * time.Second).UnixNano())
+					return nil, fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, t.retryThreshold)
+				}
+			}
+
+			time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
+			continue
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if !retrying {
+				retrying = true
+				if t.retryCounter.Add(1) > t.retryThreshold {
+					t.trippedUntil.Store(time.Now().Add(5 * time.Second).UnixNano())
+					return resp, fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, t.retryThreshold)
+				}
+			}
+
+			bodyBytes, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+
+			if err == nil {
+				var rateErr rateLimitError
+				if json.Unmarshal(bodyBytes, &rateErr) == nil {
+					retryAfter := time.Duration(rateErr.RetryAfter * float64(time.Second))
+					if retryAfter == 0 {
+						retryAfter = time.Minute
+					}
+					t.limiter.SetGlobalWait(retryAfter)
+				}
+
+				resp.Body = io.NopCloser(bytes.NewReader(bodyBytes)) // restore body
+			}
+
+			lastResp = resp
+			lastErr = ErrRemoteRatelimit
+			continue
+		}
+
+		if resp.StatusCode >= http.StatusInternalServerError {
+			if !retrying {
+				retrying = true
+				if t.retryCounter.Add(1) > t.retryThreshold {
+					t.trippedUntil.Store(time.Now().Add(5 * time.Second).UnixNano())
+					return resp, fmt.Errorf("%w: global retry threshold (%d) exceeded", ErrLocalRatelimit, t.retryThreshold)
+				}
+			}
+
+			io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			lastResp = resp
+			lastErr = fmt.Errorf("%w: top.gg API internal server error: %s", ErrRequestFailed, resp.Status)
+
+			time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
+			continue
+		}
+
+		return resp, nil
 	}
 
-	unlock := t.limiter.Wait(route)
+	if lastErr != nil {
+		if lastResp != nil {
+			return lastResp, lastErr
+		}
 
-	resp, err := t.innerTransport.RoundTrip(req)
-	if err != nil {
-		unlock()
-		return nil, err
+		return nil, fmt.Errorf("request failed after %d retries: %w", t.maxRetries, lastErr)
 	}
 
-	unlock()
-	return resp, nil
+	return lastResp, nil
 }
