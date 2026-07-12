@@ -113,7 +113,7 @@ func (w *Webhook) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		if cErr := r.Body.Close(); cErr != nil {
-			w.tracef("failed to close webhook request body: %v", cErr)
+			w.tracef("Failed to close webhook request body: %v", cErr)
 		}
 	}()
 
@@ -130,48 +130,72 @@ func (w *Webhook) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 // The integration secret will automatically update in-memory upon integration.create events.
 func (w *Webhook) handleV1(rw http.ResponseWriter, body []byte, signatureHeader string) {
 	if err := w.validateV1(signatureHeader, body); err != nil {
+		w.tracef("Failed to validate signature: %v", err)
 		http.Error(rw, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	var payload WebhookPayload
 	if err := json.Unmarshal(body, &payload); err != nil {
+		w.tracef("Failed to unmarshal base payload: %v", err)
 		http.Error(rw, "bad request", http.StatusBadRequest)
 		return
 	}
 
 	switch payload.Type {
 	case ScopeVoteCreate:
-		if w.onVote != nil {
-			var vote VoteCreatePayload
-			if err := json.Unmarshal(payload.Data, &vote); err == nil {
-				w.onVote(vote)
-			}
+		if w.onVote == nil {
+			break
 		}
+
+		var vote VoteCreatePayload
+		if err := json.Unmarshal(payload.Data, &vote); err != nil {
+			w.tracef("Failed to unmarshal %s payload: %v", payload.Type, err)
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.onVote(vote)
 	case ScopeIntegrationCreate:
 		var integration IntegrationCreatePayload
-		if err := json.Unmarshal(payload.Data, &integration); err == nil {
-			w.secretMu.Lock()
-			w.secret = integration.Secret
-			w.secretMu.Unlock()
-			if w.onIntegrationCreate != nil {
-				w.onIntegrationCreate(integration)
-			}
+		if err := json.Unmarshal(payload.Data, &integration); err != nil {
+			w.tracef("Failed to unmarshal %s payload: %v", payload.Type, err)
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.secretMu.Lock()
+		w.secret = integration.Secret
+		w.secretMu.Unlock()
+		if w.onIntegrationCreate != nil {
+			w.onIntegrationCreate(integration)
 		}
 	case ScopeIntegrationDelete:
-		if w.onIntegrationDelete != nil {
-			var integration IntegrationDeletePayload
-			if err := json.Unmarshal(payload.Data, &integration); err == nil {
-				w.onIntegrationDelete(integration)
-			}
+		if w.onIntegrationDelete == nil {
+			break
 		}
+
+		var integration IntegrationDeletePayload
+		if err := json.Unmarshal(payload.Data, &integration); err != nil {
+			w.tracef("Failed to unmarshal %s payload: %v", payload.Type, err)
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.onIntegrationDelete(integration)
 	case ScopeWebhookTest:
-		if w.onTest != nil {
-			var test WebhookTestPayload
-			if err := json.Unmarshal(payload.Data, &test); err == nil {
-				w.onTest(test)
-			}
+		if w.onTest == nil {
+			break
 		}
+
+		var test WebhookTestPayload
+		if err := json.Unmarshal(payload.Data, &test); err != nil {
+			w.tracef("Failed to unmarshal %s payload: %v", payload.Type, err)
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.onTest(test)
 	}
 
 	rw.WriteHeader(http.StatusOK)
@@ -212,8 +236,16 @@ func (w *Webhook) validateV1(signatureHeader string, body []byte) error {
 	w.secretMu.RUnlock()
 
 	mac := hmac.New(sha256.New, []byte(secret))
-	_, _ = fmt.Fprintf(mac, "%s.", tStr) // Thanks linter...
-	mac.Write(body)
+	_, err = fmt.Fprintf(mac, "%s.", tStr)
+	if err != nil {
+		return fmt.Errorf("failed to write timestamp to hmac: %w", err)
+	}
+
+	_, err = mac.Write(body)
+	if err != nil {
+		return fmt.Errorf("failed to write body to hmac: %w", err)
+	}
+
 	digest := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(sig), []byte(digest)) {
