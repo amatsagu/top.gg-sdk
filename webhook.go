@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -68,9 +69,8 @@ type WebhookTestPayload struct {
 }
 
 type WebhookPayload struct {
-	Type  Scope           `json:"type"`
-	Trace string          `json:"trace,omitempty"` // populated from x-topgg-trace header
-	Data  json.RawMessage `json:"data"`
+	Type Scope           `json:"type"`
+	Data json.RawMessage `json:"data"`
 }
 
 type WebhookOptions struct {
@@ -83,11 +83,11 @@ type WebhookOptions struct {
 }
 
 type Webhook struct {
-	client              *Client
 	onVote              func(vote VoteCreatePayload)
 	onIntegrationCreate func(integration IntegrationCreatePayload)
 	onIntegrationDelete func(integration IntegrationDeletePayload)
 	onTest              func(test WebhookTestPayload)
+	secretMu            sync.RWMutex
 	secret              string
 	timestampWindow     time.Duration
 }
@@ -140,7 +140,9 @@ func (w *Webhook) handleV1(rw http.ResponseWriter, body []byte, signatureHeader 
 	case ScopeIntegrationCreate:
 		var integration IntegrationCreatePayload
 		if err := json.Unmarshal(payload.Data, &integration); err == nil {
-			w.secret = integration.Secret // Auto-update secret
+			w.secretMu.Lock()
+			w.secret = integration.Secret
+			w.secretMu.Unlock()
 			if w.onIntegrationCreate != nil {
 				w.onIntegrationCreate(integration)
 			}
@@ -194,7 +196,11 @@ func (w *Webhook) validateV1(signatureHeader string, body []byte) error {
 		}
 	}
 
-	mac := hmac.New(sha256.New, []byte(w.secret))
+	w.secretMu.RLock()
+	secret := w.secret
+	w.secretMu.RUnlock()
+
+	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = fmt.Fprintf(mac, "%s.", tStr) // Thanks linter...
 	mac.Write(body)
 	digest := hex.EncodeToString(mac.Sum(nil))
