@@ -1,6 +1,7 @@
 package topgg
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -106,8 +107,8 @@ const (
 
 // GetProject fetches project data by its ID.
 // https://docs.top.gg/api/v1/projects#get-%2Fprojects%2Fproject_id
-func (c *Client) GetProject(id Snowflake) (*Project, error) {
-	b, err := c.request(http.MethodGet, fmt.Sprintf("/v1/projects/%s", id), nil)
+func (c *Client) GetProject(ctx context.Context, id Snowflake) (*Project, error) {
+	b, err := c.request(ctx, http.MethodGet, fmt.Sprintf("/v1/projects/%s", id), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +119,8 @@ func (c *Client) GetProject(id Snowflake) (*Project, error) {
 }
 
 // https://docs.top.gg/api/v1/projects#get-/projects/@me
-func (c *Client) GetMyProject() (*Project, error) {
-	b, err := c.request(http.MethodGet, "/v1/projects/@me", nil)
+func (c *Client) GetMyProject(ctx context.Context) (*Project, error) {
+	b, err := c.request(ctx, http.MethodGet, "/v1/projects/@me", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -130,19 +131,19 @@ func (c *Client) GetMyProject() (*Project, error) {
 }
 
 // https://docs.top.gg/api/v1/projects#patch-/projects/@me
-func (c *Client) EditMyProject(payload ProjectPayload) error {
-	_, err := c.request(http.MethodPatch, "/v1/projects/@me", payload)
+func (c *Client) EditMyProject(ctx context.Context, payload ProjectPayload) error {
+	_, err := c.request(ctx, http.MethodPatch, "/v1/projects/@me", payload)
 	return err
 }
 
 // https://docs.top.gg/api/v1/projects#put-/projects/@me/commands
-func (c *Client) PostApplicationCommands(commands []any) error {
-	_, err := c.request(http.MethodPut, "/v1/projects/@me/commands", commands)
+func (c *Client) PostApplicationCommands(ctx context.Context, commands []any) error {
+	_, err := c.request(ctx, http.MethodPut, "/v1/projects/@me/commands", commands)
 	return err
 }
 
 // https://docs.top.gg/api/v1/projects#post-/projects/@me/announcements
-func (c *Client) PostAnnouncement(title, content, category string) (*Announcement, error) {
+func (c *Client) PostAnnouncement(ctx context.Context, title, content, category string) (*Announcement, error) {
 	body := map[string]string{
 		"title":   title,
 		"content": content,
@@ -151,7 +152,7 @@ func (c *Client) PostAnnouncement(title, content, category string) (*Announcemen
 		body["category"] = category
 	}
 
-	b, err := c.request(http.MethodPost, "/v1/projects/@me/announcements", body)
+	b, err := c.request(ctx, http.MethodPost, "/v1/projects/@me/announcements", body)
 	if err != nil {
 		return nil, err
 	}
@@ -162,21 +163,21 @@ func (c *Client) PostAnnouncement(title, content, category string) (*Announcemen
 }
 
 // https://docs.top.gg/api/v1/projects#patch-/projects/@me/metrics
-func (c *Client) PostMyMetrics(payload MetricsPayload) error {
-	_, err := c.request(http.MethodPatch, "/v1/projects/@me/metrics", payload)
+func (c *Client) PostMyMetrics(ctx context.Context, payload MetricsPayload) error {
+	_, err := c.request(ctx, http.MethodPatch, "/v1/projects/@me/metrics", payload)
 	return err
 }
 
 // https://docs.top.gg/api/v1/projects#post-/projects/@me/metrics/batch
-func (c *Client) PostMyMetricsInBatch(payload []MetricsPayload) error {
+func (c *Client) PostMyMetricsInBatch(ctx context.Context, payload []MetricsPayload) error {
 	body := map[string]any{"data": payload}
-	_, err := c.request(http.MethodPost, "/v1/projects/@me/metrics/batch", body)
+	_, err := c.request(ctx, http.MethodPost, "/v1/projects/@me/metrics/batch", body)
 	return err
 }
 
 // https://docs.top.gg/api/v1/votes#get-/projects/@me/votes/user_id
-func (c *Client) GetVote(userID Snowflake, source string) (*PartialVote, error) {
-	b, err := c.request(http.MethodGet, fmt.Sprintf("/v1/projects/@me/votes/%s?source=%s", userID, source), nil)
+func (c *Client) GetVote(ctx context.Context, userID Snowflake, source string) (*PartialVote, error) {
+	b, err := c.request(ctx, http.MethodGet, fmt.Sprintf("/v1/projects/@me/votes/%s?source=%s", userID, source), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +188,7 @@ func (c *Client) GetVote(userID Snowflake, source string) (*PartialVote, error) 
 }
 
 // https://docs.top.gg/api/v1/votes#get-/projects/@me/votes
-func (c *Client) GetVotes(cursor string, startDate *time.Time) (*PaginatedVotes, error) {
+func (c *Client) GetVotes(ctx context.Context, cursor string, startDate *time.Time) (*PaginatedVotes, error) {
 	q := url.Values{}
 	if startDate != nil {
 		q.Set("startDate", startDate.Format(time.RFC3339))
@@ -195,7 +196,7 @@ func (c *Client) GetVotes(cursor string, startDate *time.Time) (*PaginatedVotes,
 		q.Set("cursor", cursor)
 	}
 
-	b, err := c.request(http.MethodGet, fmt.Sprintf("/v1/projects/@me/votes?%s", q.Encode()), nil)
+	b, err := c.request(ctx, http.MethodGet, fmt.Sprintf("/v1/projects/@me/votes?%s", q.Encode()), nil)
 	if err != nil {
 		return nil, err
 	}
