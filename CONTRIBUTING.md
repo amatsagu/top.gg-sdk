@@ -12,7 +12,8 @@ This project uses [Lefthook](https://lefthook.dev/) for development to run pre-c
 It is **not** included as a tool dependency in `go.mod`, so it needs a separate command to initialize the various hooks:
 
 ```bash
-go tool github.com/evilmartians/lefthook/v2 install
+go install github.com/evilmartians/lefthook/v2@latest
+lefthook install
 ```
 
 **You only need to run this command once after cloning the repository.**
