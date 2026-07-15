@@ -123,13 +123,17 @@ err := client.PostMyMetrics(ctx, topgg.MetricsPayload{
 #### Batch
 
 ```go
-err := client.PostMyMetricsInBatch(ctx, []topgg.MetricsPayload{
+err := client.PostMyMetricsInBatch(ctx, []topgg.BatchMetricsPayload{
 	{
-		ServerCount: 420,
-		ShardCount:  53,
+		Metrics: topgg.MetricsPayload{
+			ServerCount: 420,
+			ShardCount:  53,
+		},
 	},
 	{
-		ServerCount: 435,
+		Metrics: topgg.MetricsPayload{
+			ServerCount: 435,
+		},
 	},
 })
 ```
