@@ -1,13 +1,12 @@
 package topgg
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,10 +39,6 @@ type rateLimitTransport struct {
 	retryThreshold int64
 	trippedUntil   atomic.Int64
 	maxRetries     uint8
-}
-
-type rateLimitError struct {
-	RetryAfter float64 `json:"retry-after"`
 }
 
 func NewRateLimiter(opt RateLimiterOptions) *RateLimiter {
@@ -146,7 +141,13 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 			return nil, err
 		}
 
-		if i > 0 && req.GetBody != nil {
+		if i > 0 && req.Body != nil {
+			if req.GetBody == nil {
+				if lastResp != nil {
+					return nil, lastErr
+				}
+				return nil, fmt.Errorf("request failed after %d retries (body is not rewindable): %w", i, lastErr)
+			}
 			body, err := req.GetBody()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get request body for retry: %w", err)
@@ -167,7 +168,16 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 				}
 			}
 
-			time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
+			if i < t.maxRetries-1 {
+				timer := time.NewTimer(time.Millisecond * time.Duration(250*int64(i+1)))
+				select {
+				case <-req.Context().Done():
+					timer.Stop()
+					return nil, req.Context().Err()
+				case <-timer.C:
+				}
+			}
+
 			continue
 		}
 
@@ -185,29 +195,30 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 				}
 			}
 
-			bodyBytes, err := io.ReadAll(resp.Body)
-			if cErr := resp.Body.Close(); cErr != nil {
-				lastResp = resp
-				lastErr = fmt.Errorf("%w: failed to close rate limit response body: %v", ErrRequestFailed, cErr)
-				time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
-				continue
-			}
-
-			if err == nil {
-				var rateErr rateLimitError
-				if json.Unmarshal(bodyBytes, &rateErr) == nil {
-					retryAfter := time.Duration(rateErr.RetryAfter * float64(time.Second))
-					if retryAfter == 0 {
-						retryAfter = time.Minute
-					}
-					t.limiter.SetGlobalWait(retryAfter)
+			if retryAfterStr := resp.Header.Get("Retry-After"); retryAfterStr != "" {
+				if retryAfterSec, err := strconv.Atoi(retryAfterStr); err == nil {
+					t.limiter.SetGlobalWait(time.Duration(retryAfterSec) * time.Second)
 				}
-
-				resp.Body = io.NopCloser(bytes.NewReader(bodyBytes)) // restore body
+			} else {
+				t.limiter.SetGlobalWait(time.Minute)
 			}
 
 			lastResp = resp
 			lastErr = ErrRemoteRatelimit
+			if cErr := resp.Body.Close(); cErr != nil {
+				lastErr = fmt.Errorf("%w, and failed to close response body: %v", lastErr, cErr)
+			}
+
+			if i < t.maxRetries-1 {
+				timer := time.NewTimer(time.Millisecond * time.Duration(250*int64(i+1)))
+				select {
+				case <-req.Context().Done():
+					timer.Stop()
+					return nil, req.Context().Err()
+				case <-timer.C:
+				}
+			}
+
 			continue
 		}
 
@@ -231,12 +242,21 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 				lastErr = fmt.Errorf("%w: top.gg API internal server error: %s", ErrRequestFailed, resp.Status)
 			}
 
+			lastResp = resp
 			if cErr := resp.Body.Close(); cErr != nil {
-				lastErr = fmt.Errorf("%w: failed to close internal server error response body: %v", ErrRequestFailed, cErr)
+				lastErr = fmt.Errorf("%w, and failed to close response body: %v", lastErr, cErr)
 			}
 
-			lastResp = resp
-			time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
+			if i < t.maxRetries-1 {
+				timer := time.NewTimer(time.Millisecond * time.Duration(250*int64(i+1)))
+				select {
+				case <-req.Context().Done():
+					timer.Stop()
+					return nil, req.Context().Err()
+				case <-timer.C:
+				}
+			}
+
 			continue
 		}
 
