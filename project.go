@@ -105,6 +105,11 @@ const (
 	LocaleChinese    Locale = "zh"
 )
 
+type BatchMetricsPayload struct {
+	Timestamp *time.Time     `json:"timestamp,omitempty"`
+	Metrics   MetricsPayload `json:"metrics"`
+}
+
 // GetProject fetches project data by its ID.
 // https://docs.top.gg/api/v1/projects#get-%2Fprojects%2Fproject_id
 func (c *Client) GetProject(ctx context.Context, id Snowflake) (*Project, error) {
@@ -169,7 +174,7 @@ func (c *Client) PostMyMetrics(ctx context.Context, payload MetricsPayload) erro
 }
 
 // https://docs.top.gg/api/v1/projects#post-/projects/@me/metrics/batch
-func (c *Client) PostMyMetricsInBatch(ctx context.Context, payload []MetricsPayload) error {
+func (c *Client) PostMyMetricsInBatch(ctx context.Context, payload []BatchMetricsPayload) error {
 	body := map[string]any{"data": payload}
 	_, err := c.request(ctx, http.MethodPost, "/v1/projects/@me/metrics/batch", body)
 	return err
