@@ -188,7 +188,7 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 			bodyBytes, err := io.ReadAll(resp.Body)
 			if cErr := resp.Body.Close(); cErr != nil {
 				lastResp = resp
-				lastErr = fmt.Errorf("%w: failed to close rate limit response body: %w", ErrRequestFailed, cErr)
+				lastErr = fmt.Errorf("%w: failed to close rate limit response body: %v", ErrRequestFailed, cErr)
 				time.Sleep(time.Millisecond * time.Duration(250*int64(i+1)))
 				continue
 			}
@@ -226,13 +226,13 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 			}
 
 			if _, err := io.Copy(io.Discard, resp.Body); err != nil {
-				lastErr = fmt.Errorf("%w: failed to read top.gg API internal server error body: %w", ErrRequestFailed, err)
+				lastErr = fmt.Errorf("%w: failed to read top.gg API internal server error body: %v", ErrRequestFailed, err)
 			} else {
 				lastErr = fmt.Errorf("%w: top.gg API internal server error: %s", ErrRequestFailed, resp.Status)
 			}
 
 			if cErr := resp.Body.Close(); cErr != nil {
-				lastErr = fmt.Errorf("%w: failed to close internal server error response body: %w", ErrRequestFailed, cErr)
+				lastErr = fmt.Errorf("%w: failed to close internal server error response body: %v", ErrRequestFailed, cErr)
 			}
 
 			lastResp = resp
