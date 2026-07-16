@@ -54,7 +54,7 @@ func main() {
 ### Getting your project's information
 
 ```go
-project, err := client.GetMyProject(ctx)
+project, err := client.GetProject(ctx)
 if err != nil {
 	log.Fatal(err)
 }
@@ -65,7 +65,7 @@ log.Printf("Project ID: %s, Name: %s", project.ID, project.Name)
 ### Updating your project's information
 
 ```go
-err := client.EditMyProject(ctx, topgg.ProjectPayload{
+err := client.EditProject(ctx, topgg.ProjectPayload{
 	Headline: map[topgg.Locale]string{
 		topgg.LocaleEnglish: "A great bot with tons of features!",
 	},
@@ -114,7 +114,7 @@ log.Printf("Announcement posted at: %s", announcement.CreatedAt)
 #### Single
 
 ```go
-err := client.PostMyMetrics(ctx, topgg.MetricsPayload{
+err := client.PostMetrics(ctx, topgg.MetricsPayload{
 	ServerCount: 420,
 	ShardCount:  53,
 })
@@ -123,7 +123,7 @@ err := client.PostMyMetrics(ctx, topgg.MetricsPayload{
 #### Batch
 
 ```go
-err := client.PostMyMetricsInBatch(ctx, []topgg.BatchMetricsPayload{
+err := client.PostMetricsInBatch(ctx, []topgg.BatchMetricsPayload{
 	{
 		Metrics: topgg.MetricsPayload{
 			ServerCount: 420,

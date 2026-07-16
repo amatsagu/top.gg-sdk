@@ -110,21 +110,8 @@ type BatchMetricsPayload struct {
 	Metrics   MetricsPayload `json:"metrics"`
 }
 
-// GetProject fetches project data by its ID.
-// https://docs.top.gg/api/v1/projects#get-%2Fprojects%2Fproject_id
-func (c *Client) GetProject(ctx context.Context, id Snowflake) (*Project, error) {
-	b, err := c.request(ctx, http.MethodGet, fmt.Sprintf("/v1/projects/%s", id), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var project Project
-	err = json.Unmarshal(b, &project)
-	return &project, err
-}
-
 // https://docs.top.gg/api/v1/projects#get-/projects/@me
-func (c *Client) GetMyProject(ctx context.Context) (*Project, error) {
+func (c *Client) GetProject(ctx context.Context) (*Project, error) {
 	b, err := c.request(ctx, http.MethodGet, "/v1/projects/@me", nil)
 	if err != nil {
 		return nil, err
@@ -136,7 +123,7 @@ func (c *Client) GetMyProject(ctx context.Context) (*Project, error) {
 }
 
 // https://docs.top.gg/api/v1/projects#patch-/projects/@me
-func (c *Client) EditMyProject(ctx context.Context, payload ProjectPayload) error {
+func (c *Client) EditProject(ctx context.Context, payload ProjectPayload) error {
 	_, err := c.request(ctx, http.MethodPatch, "/v1/projects/@me", payload)
 	return err
 }
@@ -168,13 +155,13 @@ func (c *Client) PostAnnouncement(ctx context.Context, title, content, category 
 }
 
 // https://docs.top.gg/api/v1/projects#patch-/projects/@me/metrics
-func (c *Client) PostMyMetrics(ctx context.Context, payload MetricsPayload) error {
+func (c *Client) PostMetrics(ctx context.Context, payload MetricsPayload) error {
 	_, err := c.request(ctx, http.MethodPatch, "/v1/projects/@me/metrics", payload)
 	return err
 }
 
 // https://docs.top.gg/api/v1/projects#post-/projects/@me/metrics/batch
-func (c *Client) PostMyMetricsInBatch(ctx context.Context, payload []BatchMetricsPayload) error {
+func (c *Client) PostMetricsInBatch(ctx context.Context, payload []BatchMetricsPayload) error {
 	body := map[string]any{"data": payload}
 	_, err := c.request(ctx, http.MethodPost, "/v1/projects/@me/metrics/batch", body)
 	return err
