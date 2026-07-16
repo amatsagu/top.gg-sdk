@@ -59,11 +59,11 @@ type PaginatedVotes struct {
 // https://docs.top.gg/api/v1/projects#discord-server
 // https://docs.top.gg/api/v1/projects#roblox-game
 type MetricsPayload struct {
-	ServerCount int `json:"server_count,omitempty"`
-	ShardCount  int `json:"shard_count,omitempty"`
-	MemberCount int `json:"member_count,omitempty"`
-	OnlineCount int `json:"online_count,omitempty"`
-	PlayerCount int `json:"player_count,omitempty"`
+	ServerCount int `json:"server_count"`
+	ShardCount  int `json:"shard_count"`
+	MemberCount int `json:"member_count"`
+	OnlineCount int `json:"online_count"`
+	PlayerCount int `json:"player_count"`
 }
 
 // https://docs.top.gg/api/v1/projects#param-platform
